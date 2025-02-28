@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Junhos Beaver Buckwheat Bonanza</title>
+  <style>
+    /* Main game area with background color */
+    #game-area {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      background: #06402B; 
+      overflow: hidden;
+      cursor: crosshair; /* double-click to spawn food */
+    }
+
+    /* Beaver: 50×50 using beaver.png, now with background-size: contain */
+    .beaver {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      background: url('beaver.png') no-repeat center center;
+      background-size: contain;
+      user-select: none;
+    }
+
+    /* Food: 30×30 using food.png, also with contain */
+    .food {
+      position: absolute;
+      width: 30px;
+      height: 30px;
+      background: url('food.png') no-repeat center center;
+      background-size: contain;
+      cursor: grab;
+      user-select: none;
+    }
+
+    /* Egg: 40×50 using egg1..egg4.png, also with contain */
+    .egg {
+      position: absolute;
+      width: 40px;
+      height: 50px;
+      /* We'll dynamically switch images in JS, but always use contain. */
+      background-size: contain;
+      background-position: center;
+      background-repeat: no-repeat;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    /* Example shake animation for the egg */
+    .shake {
+      animation: shake 0.3s;
+    }
+    @keyframes shake {
+      0%   { transform: translate(0, 0); }
+      20%  { transform: translate(-2px, 0); }
+      40%  { transform: translate(2px, 0); }
+      60%  { transform: translate(-2px, 0); }
+      80%  { transform: translate(2px, 0); }
+      100% { transform: translate(0, 0); }
+    }
+  </style>
+</head>
+<body>
+  <div id="game-area">
+    <!-- Start with one beaver on the field -->
+    <div id="beaver-1" class="beaver"></div>
+  </div>
+
+  <script>
+    /************************************************
+     *             Collision Helpers
+     ************************************************/
+    function isOverlappingRect(r1, r2) {
+      return !(
+        r2.left > r1.right ||
+        r2.right < r1.left ||
+        r2.top > r1.bottom ||
+        r2.bottom < r1.top
+      );
+    }
+    function isOverlapping(elem1, elem2) {
+      if (!elem1 || !elem2) return false;
+      const r1 = elem1.getBoundingClientRect();
+      const r2 = elem2.getBoundingClientRect();
+      return isOverlappingRect(r1, r2);
+    }
+
+    function avoidOverlap(element, selector, maxTries = 20) {
+      let tries = 0;
+      const others = document.querySelectorAll(selector);
+      while (tries < maxTries) {
+        let overlapFound = false;
+        for (const other of others) {
+          if (other !== element && isOverlapping(element, other)) {
+            overlapFound = true;
+            // Shift element by some offset
+            const currentLeft = parseInt(element.style.left) || 0;
+            const currentTop  = parseInt(element.style.top)  || 0;
+            element.style.left = (currentLeft + 10) + 'px';
+            element.style.top  = (currentTop  + 10) + 'px';
+            break;
+          }
+        }
+        if (!overlapFound) break;
+        tries++;
+      }
+    }
+
+    /************************************************
+     *                 Beaver Class
+     ************************************************/
+    class Beaver {
+      constructor(element) {
+        this.element = element;
+        this.feedCount = 0;
+        this.feedThreshold = 3; // # feeds => produce egg
+
+        // Position & velocity
+        this.x = parseInt(this.element.style.left) || 100;
+        this.y = parseInt(this.element.style.top)  || 100;
+
+        // Slower roam speed: range [-1,1]
+        this.vx = (Math.random() * 2) - 1;
+        this.vy = (Math.random() * 2) - 1;
+
+        this.initPosition();
+        this.startMoving();
+      }
+
+      initPosition() {
+        if (!this.element.style.top && !this.element.style.left) {
+          this.element.style.top  = '100px';
+          this.element.style.left = '100px';
+        }
+        avoidOverlap(this.element, '.food, .egg');
+      }
+
+      feed() {
+        this.feedCount++;
+        if (this.feedCount >= this.feedThreshold) {
+          this.produceEgg();
+          this.feedCount = 0;
+        }
+      }
+
+      produceEgg() {
+        const eggElem = document.createElement('div');
+        eggElem.className = 'egg';
+        eggElem.style.top  = this.element.style.top;
+        eggElem.style.left = this.element.style.left;
+        gameArea.appendChild(eggElem);
+
+        avoidOverlap(eggElem, '.food, .egg');
+        new Egg(eggElem);
+      }
+
+      startMoving() {
+        const moveBeaver = () => {
+          this.x += this.vx;
+          this.y += this.vy;
+
+          // Boundary checks
+          const maxX = gameArea.clientWidth  - this.element.offsetWidth;
+          const maxY = gameArea.clientHeight - this.element.offsetHeight;
+
+          if (this.x < 0) {
+            this.x = 0;
+            this.vx = -this.vx;
+          } else if (this.x > maxX) {
+            this.x = maxX;
+            this.vx = -this.vx;
+          }
+          if (this.y < 0) {
+            this.y = 0;
+            this.vy = -this.vy;
+          } else if (this.y > maxY) {
+            this.y = maxY;
+            this.vy = -this.vy;
+          }
+
+          // Random wander
+          if (Math.random() < 0.01) {
+            this.vx += (Math.random() * 1 - 0.5);
+            this.vy += (Math.random() * 1 - 0.5);
+          }
+
+          // Apply to element
+          this.element.style.left = this.x + 'px';
+          this.element.style.top  = this.y + 'px';
+
+          // Auto-eat any overlapping food
+          this.eatIfCollidingWithFood();
+          requestAnimationFrame(moveBeaver);
+        };
+        requestAnimationFrame(moveBeaver);
+      }
+
+      eatIfCollidingWithFood() {
+        const beaverRect = this.element.getBoundingClientRect();
+        const allFoods = document.querySelectorAll('.food');
+        for (const foodElem of allFoods) {
+          const foodRect = foodElem.getBoundingClientRect();
+          if (isOverlappingRect(beaverRect, foodRect)) {
+            // Eat => feed => remove
+            this.feed();
+            foodElem.remove();
+          }
+        }
+      }
+    }
+
+    /************************************************
+     *            Egg Class (3 clicks)
+     ************************************************/
+    class Egg {
+      constructor(element) {
+        this.element = element;
+        this.eggImages = ['egg1.png','egg2.png','egg3.png','egg4.png'];
+        this.clickCount = 0;
+        this.hatchThreshold = 3; // 3 clicks
+
+        // Start on egg1
+        this.currentImageIndex = 0;
+        this.element.style.background = 
+          `url('${this.eggImages[0]}') center center / contain no-repeat`;
+
+        // Egg click
+        this.element.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          this.handleClick();
+        });
+      }
+
+      handleClick() {
+        // Shake anim
+        this.shakeOnce();
+
+        // Cycle images
+        this.clickCount++;
+        this.currentImageIndex = Math.min(this.clickCount, this.eggImages.length - 1);
+        this.element.style.background = 
+          `url('${this.eggImages[this.currentImageIndex]}') center center / contain no-repeat`;
+
+        // On 3rd click => hatch
+        if (this.clickCount >= this.hatchThreshold) {
+          this.hatch();
+        }
+      }
+
+      shakeOnce() {
+        this.element.classList.add('shake');
+        setTimeout(() => {
+          this.element.classList.remove('shake');
+        }, 300);
+      }
+
+      hatch() {
+        const topVal  = this.element.style.top;
+        const leftVal = this.element.style.left;
+        this.element.remove();
+
+        // Spawn new beaver
+        const newBeaverElem = document.createElement('div');
+        newBeaverElem.className = 'beaver';
+        newBeaverElem.style.top  = topVal;
+        newBeaverElem.style.left = leftVal;
+        gameArea.appendChild(newBeaverElem);
+
+        const newBeaver = new Beaver(newBeaverElem);
+        beaverInstances.set(newBeaverElem, newBeaver);
+      }
+    }
+
+    /************************************************
+     *                 Food Class
+     ************************************************/
+    class Food {
+      constructor(x, y) {
+        this.element = document.createElement('div');
+        this.element.className = 'food';
+
+        this.element.style.top  = y + 'px';
+        this.element.style.left = x + 'px';
+        gameArea.appendChild(this.element);
+
+        avoidOverlap(this.element, '.egg, .food');
+
+        // Dragging
+        this.offsetX = 0;
+        this.offsetY = 0;
+        this.isDragging = false;
+        this.oldLeft = this.element.style.left; 
+        this.oldTop  = this.element.style.top;
+
+        // Listeners
+        this.element.addEventListener('mousedown', (e) => this.onMouseDown(e));
+        document.addEventListener('mousemove', (e) => this.onMouseMove(e));
+        document.addEventListener('mouseup',   (e) => this.onMouseUp(e));
+      }
+
+      onMouseDown(e) {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        this.isDragging = true;
+        this.offsetX = e.clientX - this.element.offsetLeft;
+        this.offsetY = e.clientY - this.element.offsetTop;
+        this.element.style.cursor = 'grabbing';
+
+        this.oldLeft = this.element.style.left;
+        this.oldTop  = this.element.style.top;
+      }
+
+      onMouseMove(e) {
+        if (!this.isDragging) return;
+        e.preventDefault();
+        this.element.style.left = (e.clientX - this.offsetX) + 'px';
+        this.element.style.top  = (e.clientY - this.offsetY) + 'px';
+      }
+
+      onMouseUp(e) {
+        if (!this.isDragging) return;
+        this.isDragging = false;
+        this.element.style.cursor = 'grab';
+
+        // Avoid overlap with other eggs/food
+        avoidOverlap(this.element, '.egg, .food');
+
+        // If STILL overlapping => revert
+        const allEggsFoods = document.querySelectorAll('.egg, .food');
+        for (const other of allEggsFoods) {
+          if (other !== this.element && isOverlapping(this.element, other)) {
+            this.element.style.left = this.oldLeft;
+            this.element.style.top  = this.oldTop;
+            break;
+          }
+        }
+      }
+    }
+
+    /************************************************
+     *      Main Game Setup
+     ************************************************/
+    const gameArea = document.getElementById('game-area');
+    const beaverInstances = new Map();
+
+    // Initialize the first beaver
+    const firstBeaverElem = document.getElementById('beaver-1');
+    firstBeaverElem.style.top  = '200px';
+    firstBeaverElem.style.left = '200px';
+    const firstBeaver = new Beaver(firstBeaverElem);
+    beaverInstances.set(firstBeaverElem, firstBeaver);
+
+    // Double-click background => spawn food
+    gameArea.addEventListener('dblclick', (e) => {
+      if (e.target !== gameArea) return;
+      const rect = gameArea.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      new Food(x, y);
+    });
+  </script>
+</body>
+</html>
