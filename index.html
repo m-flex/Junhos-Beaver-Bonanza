@@ -105,7 +105,7 @@
       constructor(element) {
         this.element = element;
         this.feedCount = 0;
-        this.feedThreshold = 4; 
+        this.feedThreshold = 3; 
 
         // Position & velocity
         this.x = parseInt(this.element.style.left) || 100;
@@ -209,7 +209,7 @@
         this.element = element;
         this.eggImages = ['egg1.png','egg2.png','egg3.png','egg4.png'];
         this.clickCount = 0;
-        this.hatchThreshold = 3; // 3 clicks
+        this.hatchThreshold = 4; // 3 clicks
 
         // Start on egg1
         this.currentImageIndex = 0;
