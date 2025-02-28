@@ -4,7 +4,6 @@
   <meta charset="UTF-8">
   <title>Junhos Beaver Buckwheat Bonanza</title>
   <style>
-    /* Main game area with background color */
     #game-area {
       position: relative;
       width: 100vw;
@@ -13,8 +12,6 @@
       overflow: hidden;
       cursor: crosshair; /* double-click to spawn food */
     }
-
-    /* Beaver: 50×50 using beaver.png, now with background-size: contain */
     .beaver {
       position: absolute;
       width: 100px;
@@ -23,8 +20,6 @@
       background-size: contain;
       user-select: none;
     }
-
-    /* Food: 30×30 using food.png, also with contain */
     .food {
       position: absolute;
       width: 30px;
@@ -34,13 +29,11 @@
       cursor: grab;
       user-select: none;
     }
-
-    /* Egg: 40×50 using egg1..egg4.png, also with contain */
+    
     .egg {
       position: absolute;
       width: 40px;
       height: 50px;
-      /* We'll dynamically switch images in JS, but always use contain. */
       background-size: contain;
       background-position: center;
       background-repeat: no-repeat;
@@ -48,7 +41,6 @@
       user-select: none;
     }
 
-    /* Example shake animation for the egg */
     .shake {
       animation: shake 0.3s;
     }
@@ -64,7 +56,6 @@
 </head>
 <body>
   <div id="game-area">
-    <!-- Start with one beaver on the field -->
     <div id="beaver-1" class="beaver"></div>
   </div>
 
@@ -95,7 +86,6 @@
         for (const other of others) {
           if (other !== element && isOverlapping(element, other)) {
             overlapFound = true;
-            // Shift element by some offset
             const currentLeft = parseInt(element.style.left) || 0;
             const currentTop  = parseInt(element.style.top)  || 0;
             element.style.left = (currentLeft + 10) + 'px';
@@ -115,7 +105,7 @@
       constructor(element) {
         this.element = element;
         this.feedCount = 0;
-        this.feedThreshold = 3; // # feeds => produce egg
+        this.feedThreshold = 3; 
 
         // Position & velocity
         this.x = parseInt(this.element.style.left) || 100;
